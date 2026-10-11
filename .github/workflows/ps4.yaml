@@ -1,0 +1,50 @@
+name: Build PS4 client (OpenOrbis, experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["ps4/**", ".github/workflows/ps4.yml"]
+
+jobs:
+  pc-test:
+    name: Build and smoke-test the portable core (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make -C ps4
+
+  ps4:
+    name: Build eboot.bin with OpenOrbis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang and lld
+        run: sudo apt-get update && sudo apt-get install -y clang lld
+
+      - name: Get the OpenOrbis toolchain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$HOME/oo"
+          cd "$HOME/oo"
+          gh release download --repo OpenOrbis/OpenOrbis-PS4-Toolchain --pattern "*.tar.gz" || true
+          if ls *.tar.gz >/dev/null 2>&1; then
+            tar xzf *.tar.gz
+          else
+            git clone --depth 1 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git
+          fi
+          # The folder that contains link.x is the toolchain root.
+          root=$(dirname "$(find "$HOME/oo" -name link.x | head -n1)")
+          echo "OO_PS4_TOOLCHAIN=$root" >> "$GITHUB_ENV"
+          echo "Toolchain root: $root"
+
+      - name: Build
+        run: make -C ps4 -f Makefile.ps4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carracers-ps4-eboot
+          path: ps4/build_ps4/eboot.bin

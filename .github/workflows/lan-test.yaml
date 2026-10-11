@@ -1,0 +1,27 @@
+name: LAN tests (phone, phone, PS4 client)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  GODOT_VERSION: "4.3"
+
+jobs:
+  lan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -o godot.zip
+          unzip -q godot.zip
+          sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+
+      - name: Import project
+        run: godot --headless --path . --import
+
+      - name: Run LAN tests (phone<->phone and PS4<->phone on loopback)
+        run: ./tests/run_lan_tests.sh
