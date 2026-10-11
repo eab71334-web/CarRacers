@@ -1,0 +1,38 @@
+# PS4 build with the OpenOrbis toolchain (best effort, see README.md).
+# Usage: export OO_PS4_TOOLCHAIN=/path/to/OpenOrbis/PS4Toolchain && make -f Makefile.ps4
+
+ifndef OO_PS4_TOOLCHAIN
+$(error OO_PS4_TOOLCHAIN is not set)
+endif
+
+TARGET   := carracers
+SRC      := src/main.cpp src/game.cpp src/platform_ps4.cpp
+OUT      := build_ps4
+OBJS     := $(patsubst src/%.cpp,$(OUT)/%.o,$(SRC))
+
+CXX      := clang++
+LD       := ld.lld
+
+CXXFLAGS := -target x86_64-pc-freebsd12-elf -std=c++17 -O2 -fno-builtin -fPIC -funwind-tables \
+            -fno-exceptions -fno-rtti -mcmodel=large -D_LIBCPP_HAS_NO_THREADS \
+            -isysroot $(OO_PS4_TOOLCHAIN) -isystem $(OO_PS4_TOOLCHAIN)/include \
+            -isystem $(OO_PS4_TOOLCHAIN)/include/c++/v1 -DCR_PS4
+
+LDFLAGS  := -m elf_x86_64 -pie --script $(OO_PS4_TOOLCHAIN)/link.x --eh-frame-hdr \
+            -L$(OO_PS4_TOOLCHAIN)/lib $(OO_PS4_TOOLCHAIN)/lib/crt1.o
+LIBS     := -lc -lc++ -lkernel -lSceVideoOut -lScePad -lSceUserService -lSceNet -lSceSysmodule -lm
+
+all: $(OUT)/eboot.bin
+
+$(OUT)/%.o: src/%.cpp src/*.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OUT)/$(TARGET).elf: $(OBJS)
+	$(LD) $(OBJS) -o $@ $(LDFLAGS) $(LIBS)
+
+$(OUT)/eboot.bin: $(OUT)/$(TARGET).elf
+	$(OO_PS4_TOOLCHAIN)/bin/linux/create-fself -in=$< --out=$(OUT)/$(TARGET).oelf --eboot=$@ --paid 0x3800000000000011
+
+clean:
+	rm -rf $(OUT)
